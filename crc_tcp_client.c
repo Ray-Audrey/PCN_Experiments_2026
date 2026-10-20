@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -24,17 +23,16 @@ int main()
 {
     int s, error, pos, n;
     char data[100], temp[200], rem[10];
-    struct sockaddr_in server;
+    struct sockaddr_in a = {0};
 
     s = socket(AF_INET, SOCK_STREAM, 0);
+    a.sin_family = AF_INET;
+    a.sin_port = htons(8082);
+    inet_pton(AF_INET, "127.0.0.1", &a.sin_addr);
 
-    server.sin_family = AF_INET;
-    server.sin_port = htons(8082);
-    server.sin_addr.s_addr = inet_addr("127.0.0.1");
+    connect(s, (struct sockaddr *)&a, sizeof(a));
 
-    connect(s, (struct sockaddr *)&server, sizeof(server));
-
-    printf("Enter binary data (1s and 0s): ");
+    printf("Enter binary data: ");
     scanf("%99s", data);
 
     for (int i = 0; data[i]; i++)
@@ -54,21 +52,20 @@ int main()
 
     strcpy(temp, data);
     strcat(temp, "0000");
-
     divide(temp, rem);
     strcat(data, rem);
 
     printf("CRC Remainder: %s\n", rem);
     printf("Frame with CRC: %s\n", data);
 
-    printf("Introduce bit error? (1=Yes, 0=No): ");
+    printf("Introduce error? (1=Yes, 0=No): ");
     scanf("%d", &error);
 
     n = strlen(data);
 
     if (error == 1)
     {
-        printf("Enter bit position to flip (1-%d): ", n);
+        printf("Bit position to flip (1-%d): ", n);
         scanf("%d", &pos);
 
         if (pos < 1 || pos > n)
@@ -78,13 +75,12 @@ int main()
             return 1;
         }
 
-        pos--;
-        data[pos] = (data[pos] == '0') ? '1' : '0';
+        data[pos-1] = (data[pos-1] == '0') ? '1' : '0';
         printf("Modified Frame: %s\n", data);
     }
 
     send(s, data, strlen(data), 0);
-    printf("Frame sent through TCP.\n");
+    printf("Frame sent through TCP\n");
 
     close(s);
     return 0;

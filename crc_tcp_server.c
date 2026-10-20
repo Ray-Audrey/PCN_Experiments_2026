@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -24,29 +23,23 @@ int main()
 {
     int s, c, n, error = 0;
     char frame[200], rem[10];
-    struct sockaddr_in addr;
+    struct sockaddr_in a = {0};
 
     s = socket(AF_INET, SOCK_STREAM, 0);
+    a.sin_family = AF_INET;
+    a.sin_port = htons(8082);
+    a.sin_addr.s_addr = INADDR_ANY;
 
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(8082);
-    addr.sin_addr.s_addr = INADDR_ANY;
-
-    bind(s, (struct sockaddr *)&addr, sizeof(addr));
+    bind(s, (struct sockaddr *)&a, sizeof(a));
     listen(s, 1);
 
     printf("CRC Server Waiting...\n");
     c = accept(s, NULL, NULL);
 
-    n = recv(c, frame, sizeof(frame)-1, 0);
-    if (n <= 0)
-    {
-        close(c);
-        close(s);
-        return 1;
-    }
-    frame[n] = '\0';
+    n = recv(c, frame, 199, 0);
+    if (n <= 0) return 1;
 
+    frame[n] = '\0';
     printf("Received Frame: %s\n", frame);
 
     divide(frame, rem);
@@ -56,10 +49,7 @@ int main()
         if (rem[i] != '0')
             error = 1;
 
-    if (error)
-        printf("Error Detected\n");
-    else
-        printf("No Error Detected\n");
+    printf("%s\n", error ? "Error Detected" : "No Error Detected");
 
     close(c);
     close(s);

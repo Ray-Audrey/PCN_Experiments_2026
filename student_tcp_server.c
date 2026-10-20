@@ -1,6 +1,4 @@
-
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
@@ -8,16 +6,15 @@
 #include <sys/socket.h>
 #include <stdint.h>
 
-void *handle_client(void *arg)
+void *handle(void *arg)
 {
-    int client = (intptr_t)arg;
+    int c = (intptr_t)arg, found = 0;
     char roll[100], line[300], result[500] = "";
     char r[50], name[100], dept[100], sem[50], cgpa[50];
-    int found = 0;
 
-    int n = recv(client, roll, sizeof(roll) - 1, 0);
+    int n = recv(c, roll, sizeof(roll) - 1, 0);
     if (n <= 0) {
-        close(client);
+        close(c);
         return NULL;
     }
 
@@ -26,17 +23,16 @@ void *handle_client(void *arg)
 
     FILE *fp = fopen("students.csv", "r");
 
-    if (fp != NULL) {
+    if (fp) {
         while (fgets(line, sizeof(line), fp)) {
             if (sscanf(line, "%49[^,],%99[^,],%99[^,],%49[^,],%49[^\n]",
-                       r, name, dept, sem, cgpa) == 5) {
-                if (strcmp(r, roll) == 0) {
-                    snprintf(result, sizeof(result),
-                             "Roll Number: %s\nName: %s\nDepartment: %s\nSemester: %s\nCGPA: %s\n",
-                             r, name, dept, sem, cgpa);
-                    found = 1;
-                    break;
-                }
+                       r, name, dept, sem, cgpa) == 5 &&
+                strcmp(r, roll) == 0) {
+                snprintf(result, sizeof(result),
+                         "Roll: %s\nName: %s\nDepartment: %s\nSemester: %s\nCGPA: %s\n",
+                         r, name, dept, sem, cgpa);
+                found = 1;
+                break;
             }
         }
         fclose(fp);
@@ -45,38 +41,33 @@ void *handle_client(void *arg)
     if (!found)
         strcpy(result, "Student Record Not Found");
 
-    send(client, result, strlen(result), 0);
-    close(client);
+    send(c, result, strlen(result), 0);
+    close(c);
     return NULL;
 }
 
 int main()
 {
-    int server, client;
-    struct sockaddr_in addr;
-    pthread_t tid;
+    int s, c;
+    struct sockaddr_in a;
+    pthread_t t;
 
-    server = socket(AF_INET, SOCK_STREAM, 0);
+    s = socket(AF_INET, SOCK_STREAM, 0);
 
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(5000);
-    addr.sin_addr.s_addr = INADDR_ANY;
+    a.sin_family = AF_INET;
+    a.sin_port = htons(5000);
+    a.sin_addr.s_addr = INADDR_ANY;
 
-    bind(server, (struct sockaddr *)&addr, sizeof(addr));
-    listen(server, 5);
+    bind(s, (struct sockaddr *)&a, sizeof(a));
+    listen(s, 5);
 
-    printf("TCP server running on port 5000...\n");
+    printf("TCP Server running on port 5000...\n");
 
     while (1) {
-        client = accept(server, NULL, NULL);
-
-        if (client >= 0) {
-            pthread_create(&tid, NULL, handle_client,
-                           (void *)(intptr_t)client);
-            pthread_detach(tid);
+        c = accept(s, NULL, NULL);
+        if (c >= 0) {
+            pthread_create(&t, NULL, handle, (void *)(intptr_t)c);
+            pthread_detach(t);
         }
     }
-
-    close(server);
-    return 0;
 }

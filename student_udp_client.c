@@ -9,21 +9,19 @@
 
 int main()
 {
-    int client, n, attempts = 0, received = 0, timeouts = 0;
-    struct sockaddr_in addr;
-    socklen_t len = sizeof(addr);
-    struct timeval timeout = {2, 0};
-    struct timespec start, end;
+    int s, n, attempts = 0, received = 0, timeouts = 0;
     char roll[100], result[200];
+    struct sockaddr_in addr;
+    struct timeval tv = {2, 0};
+    struct timespec start, end;
 
-    client = socket(AF_INET, SOCK_DGRAM, 0);
+    s = socket(AF_INET, SOCK_DGRAM, 0);
 
     addr.sin_family = AF_INET;
     addr.sin_port = htons(5001);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
-    setsockopt(client, SOL_SOCKET, SO_RCVTIMEO,
-               &timeout, sizeof(timeout));
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
 
     printf("Enter Roll Number: ");
     fgets(roll, sizeof(roll), stdin);
@@ -35,11 +33,10 @@ int main()
     {
         attempts++;
 
-        sendto(client, roll, strlen(roll), 0,
+        sendto(s, roll, strlen(roll), 0,
                (struct sockaddr *)&addr, sizeof(addr));
 
-        n = recvfrom(client, result, sizeof(result) - 1, 0,
-                     (struct sockaddr *)&addr, &len);
+        n = recvfrom(s, result, sizeof(result) - 1, 0, NULL, NULL);
 
         if (n > 0)
         {
@@ -55,11 +52,7 @@ int main()
             timeouts++;
             printf("Timeout! Retrying...\n");
         }
-        else
-        {
-            perror("recvfrom");
-            break;
-        }
+        else break;
     }
 
     printf("\n--- Performance Metrics ---\n");
@@ -72,10 +65,8 @@ int main()
                      (end.tv_nsec - start.tv_nsec) / 1000000.0;
 
         printf("RTT: %.2f ms\n", rtt);
-
-        if (rtt > 0)
-            printf("Throughput: %.2f bits/sec\n",
-                   strlen(result) * 8.0 / (rtt / 1000.0));
+        printf("Throughput: %.2f bits/sec\n",
+               rtt > 0 ? strlen(result) * 8.0 / (rtt / 1000.0) : 0.0);
     }
     else
         printf("No response received\n");
@@ -83,6 +74,6 @@ int main()
     printf("Successful response ratio: %.2f%% (%d/%d)\n",
            received * 100.0 / attempts, received, attempts);
 
-    close(client);
+    close(s);
     return 0;
 }
