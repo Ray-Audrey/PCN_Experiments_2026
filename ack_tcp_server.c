@@ -1,31 +1,60 @@
 #include <stdio.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
+#include <stdint.h>
+
+void *handle_client(void *arg)
+{
+    int client = (intptr_t)arg;
+    int n;
+    char msg[100];
+
+    while ((n = recv(client, msg, 99, 0)) > 0)
+    {
+        msg[n] = '\0';
+
+        printf("Received: %s", msg);
+
+        send(client, "ACK\n", 4, 0);
+    }
+
+    close(client);
+    return NULL;
+}
 
 int main()
 {
-    int s, c, n;
-    char msg[100];
-    struct sockaddr_in a = {0};
+    int server, client;
+    pthread_t tid;
+    struct sockaddr_in addr = {0};
 
-    s = socket(AF_INET, SOCK_STREAM, 0);
-    a.sin_family = AF_INET;
-    a.sin_port = htons(5000);
-    a.sin_addr.s_addr = INADDR_ANY;
+    server = socket(AF_INET, SOCK_STREAM, 0);
 
-    bind(s, (struct sockaddr *)&a, sizeof(a));
-    listen(s, 5);
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(5000);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    bind(server, (struct sockaddr *)&addr, sizeof(addr));
+    listen(server, 5);
 
     printf("Server Waiting...\n");
-    c = accept(s, NULL, NULL);
 
-    while ((n = recv(c, msg, 99, 0)) > 0)
+    while (1)
     {
-        msg[n] = '\0';
-        printf("Received: %s", msg);
-        send(c, "ACK\n", 4, 0);
+        client = accept(server, NULL, NULL);
+
+        if (client >= 0)
+        {
+            pthread_create(&tid, NULL,
+                           handle_client,
+                           (void *)(intptr_t)client);
+
+            pthread_detach(tid);
+        }
     }
 
-    close(c);
-    close(s);
+    close(server);
+    return 0;
 }
