@@ -1,20 +1,20 @@
-
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <time.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 
 int main()
 {
-    int s, n, count = 0;
+    int s, n, queries = 0, hits = 0, timeouts = 0;
     char domain[100], result[100];
-    char cache_name[5][100], cache_ip[5][100];
-
+    char names[5][100], ips[5][100];
     struct sockaddr_in server;
     struct timeval tv = {2, 0};
-    socklen_t len = sizeof(server);
+    struct timespec start, end;
 
     s = socket(AF_INET, SOCK_DGRAM, 0);
 
@@ -32,55 +32,68 @@ int main()
         if (strcmp(domain, "exit") == 0)
             break;
 
+        queries++;
         int found = 0;
 
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < hits; i++)
         {
-            if (strcasecmp(domain, cache_name[i]) == 0)
+            if (strcasecmp(domain, names[i]) == 0)
             {
-                strcpy(result, cache_ip[i]);
+                strcpy(result, ips[i]);
                 found = 1;
-                printf("Cache Hit\n");
                 break;
             }
         }
 
-        if (!found)
+        if (found)
+            printf("Cache Hit\n");
+        else
         {
             printf("Cache Miss\n");
+            clock_gettime(CLOCK_MONOTONIC, &start);
 
             sendto(s, domain, strlen(domain), 0,
-                   (struct sockaddr *)&server, len);
+                   (struct sockaddr *)&server, sizeof(server));
 
-            n = recvfrom(s, result, sizeof(result)-1, 0, NULL, NULL);
+            n = recvfrom(s, result, sizeof(result) - 1, 0, NULL, NULL);
+            clock_gettime(CLOCK_MONOTONIC, &end);
 
             if (n < 0)
             {
-                if (errno == EAGAIN || errno == EWOULDBLOCK)
-                    printf("Timeout!\n");
-                else
-                    perror("recvfrom");
+                printf("Timeout!\n");
+                timeouts++;
                 continue;
             }
 
             result[n] = '\0';
 
+            double rtt = (end.tv_sec - start.tv_sec) * 1000.0 +
+                         (end.tv_nsec - start.tv_nsec) / 1000000.0;
+
+            printf("RTT: %.2f ms\n", rtt);
+
+            if (rtt > 0)
+                printf("Throughput: %.2f bits/sec\n",
+                       n * 8.0 / (rtt / 1000.0));
+
             if (strcmp(result, "NXDOMAIN") != 0 &&
-                strcmp(result, "INVALID") != 0 && count < 5)
+                strcmp(result, "INVALID") != 0 && hits < 5)
             {
-                strcpy(cache_name[count], domain);
-                strcpy(cache_ip[count], result);
-                count++;
+                strcpy(names[hits], domain);
+                strcpy(ips[hits], result);
+                hits++;
             }
         }
 
-        if (strcmp(result, "NXDOMAIN") == 0)
-            printf("NXDOMAIN: Domain not found\n");
-        else if (strcmp(result, "INVALID") == 0)
-            printf("Invalid domain format\n");
-        else
-            printf("IP Address: %s\n", result);
+        printf("Result: %s\n", result);
     }
+
+    printf("\n--- Metrics ---\n");
+    printf("Queries: %d\n", queries);
+    printf("Cache Entries: %d\n", hits);
+    printf("Timeouts: %d\n", timeouts);
+    printf("Cache Hit Ratio: %.2f%%\n",
+           queries ? (queries - (hits + timeouts)) * 100.0 / queries : 0.0);
 
     close(s);
     return 0;

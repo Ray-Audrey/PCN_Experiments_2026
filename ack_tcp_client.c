@@ -4,6 +4,7 @@
 #include <time.h>
 #include <errno.h>
 #include <arpa/inet.h>
+#include <sys/socket.h>
 #include <sys/time.h>
 
 int main()
@@ -30,7 +31,7 @@ int main()
         attempts++;
         send(s, msg, strlen(msg), 0);
 
-        n = recv(s, reply, sizeof(reply)-1, 0);
+        n = recv(s, reply, sizeof(reply) - 1, 0);
 
         if (n > 0)
         {
@@ -55,14 +56,17 @@ int main()
     double rtt = (end.tv_sec - start.tv_sec) * 1000.0 +
                  (end.tv_nsec - start.tv_nsec) / 1000000.0;
 
+    printf("\n--- Performance Metrics ---\n");
     printf("ACK: %s\n", ack ? "Received" : "Not received");
     printf("Attempts: %d\n", attempts);
     printf("Timeouts: %d\n", timeouts);
     printf("RTT: %.2f ms\n", rtt);
 
-    if (rtt > 0)
+    if (ack && rtt > 0)
         printf("Throughput: %.2f bits/sec\n",
-               ack * strlen(msg) * 8.0 / (rtt / 1000.0));
+               strlen(msg) * 8.0 / (rtt / 1000.0));
+    else
+        printf("Throughput: 0 bits/sec\n");
 
     printf("Successful delivery ratio: %.2f%%\n", ack * 100.0);
     printf("Attempt ACK ratio: %.2f%%\n",

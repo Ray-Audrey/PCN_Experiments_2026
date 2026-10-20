@@ -9,7 +9,7 @@
 
 int main()
 {
-    int client, n, attempts = 0, received = 0;
+    int client, n, attempts = 0, received = 0, timeouts = 0;
     struct sockaddr_in addr;
     socklen_t len = sizeof(addr);
     struct timeval timeout = {2, 0};
@@ -27,6 +27,7 @@ int main()
 
     printf("Enter Roll Number: ");
     fgets(roll, sizeof(roll), stdin);
+    roll[strcspn(roll, "\n")] = '\0';
 
     clock_gettime(CLOCK_MONOTONIC, &start);
 
@@ -37,7 +38,7 @@ int main()
         sendto(client, roll, strlen(roll), 0,
                (struct sockaddr *)&addr, sizeof(addr));
 
-        n = recvfrom(client, result, sizeof(result)-1, 0,
+        n = recvfrom(client, result, sizeof(result) - 1, 0,
                      (struct sockaddr *)&addr, &len);
 
         if (n > 0)
@@ -50,7 +51,10 @@ int main()
         }
 
         if (errno == EAGAIN || errno == EWOULDBLOCK)
+        {
+            timeouts++;
             printf("Timeout! Retrying...\n");
+        }
         else
         {
             perror("recvfrom");
@@ -58,14 +62,20 @@ int main()
         }
     }
 
+    printf("\n--- Performance Metrics ---\n");
+    printf("Attempts: %d\n", attempts);
+    printf("Timeouts: %d\n", timeouts);
+
     if (received)
     {
         double rtt = (end.tv_sec - start.tv_sec) * 1000.0 +
                      (end.tv_nsec - start.tv_nsec) / 1000000.0;
 
         printf("RTT: %.2f ms\n", rtt);
-        printf("Throughput: %.2f bits/sec\n",
-               strlen(result) * 8.0 / (rtt / 1000.0));
+
+        if (rtt > 0)
+            printf("Throughput: %.2f bits/sec\n",
+                   strlen(result) * 8.0 / (rtt / 1000.0));
     }
     else
         printf("No response received\n");
