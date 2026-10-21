@@ -1,3 +1,17 @@
+gcc server.c -o server
+gcc client.c -o client
+gcc server.c -o server -pthread
+gcc client.c -o client -pthread
+./server
+./client
+cd ~/ns-allinone/ns-3.xx
+
+./ns3 --version
+scratch/mytcp.cc
 cd ~/ns-3-dev
 ./ns3 build
 ./ns3 run scratch/wired-tcp-udp
+or 
+./ns3 run mytcp
+or 
+./waf --run mytcp
