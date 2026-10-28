@@ -2,86 +2,133 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-
-void divide(char data[], char rem[])
-{
-    char temp[200], gen[] = "10011";
-    int n = strlen(data);
-
-    strcpy(temp, data);
-
-    for (int i = 0; i <= n - 5; i++)
-        if (temp[i] == '1')
-            for (int j = 0; j < 5; j++)
-                temp[i+j] = (temp[i+j] == gen[j]) ? '0' : '1';
-
-    strncpy(rem, temp + n - 4, 4);
-    rem[4] = '\0';
-}
+#include <time.h>
 
 int main()
 {
-    int s, error, pos, n;
-    char data[100], temp[200], rem[10];
+    int s;
+
+    char data[50];
+    char divisor[20];
+    char codeword[50];
+    char remainder[20];
+    char result[100];
+
     struct sockaddr_in a = {0};
 
+    struct timespec start, end;
+    double rtt;
+
     s = socket(AF_INET, SOCK_STREAM, 0);
+
     a.sin_family = AF_INET;
-    a.sin_port = htons(8082);
-    inet_pton(AF_INET, "127.0.0.1", &a.sin_addr);
+    a.sin_port = htons(8081);
 
-    connect(s, (struct sockaddr *)&a, sizeof(a));
+    inet_pton(AF_INET,
+              "127.0.0.1",
+              &a.sin_addr);
 
-    printf("Enter binary data: ");
-    scanf("%99s", data);
+    connect(s,
+            (struct sockaddr *)&a,
+            sizeof(a));
 
-    for (int i = 0; data[i]; i++)
-        if (data[i] != '0' && data[i] != '1')
-        {
-            printf("Invalid binary data\n");
-            close(s);
-            return 1;
-        }
+    printf("Enter Data: ");
+    scanf("%s", data);
 
-    if (strlen(data) < 5)
+    printf("Enter Divisor: ");
+    scanf("%s", divisor);
+
+    strcpy(codeword, data);
+
+    int dl = strlen(data);
+    int pl = strlen(divisor);
+
+    for (int i = 0; i < pl - 1; i++)
+        strcat(codeword, "0");
+
+    strcpy(remainder, codeword);
+    for (int i = 0; i <= strlen(codeword) - pl; i++)
     {
-        printf("Enter at least 5 bits\n");
-        close(s);
-        return 1;
+        if (remainder[i] == '1')
+        {
+            for (int j = 0; j < pl; j++)
+            {
+                if (remainder[i + j] == divisor[j])
+                    remainder[i + j] = '0';
+                else
+                    remainder[i + j] = '1';
+            }
+        }
     }
 
-    strcpy(temp, data);
-    strcat(temp, "0000");
-    divide(temp, rem);
-    strcat(data, rem);
+    strcpy(codeword, data);
 
-    printf("CRC Remainder: %s\n", rem);
-    printf("Frame with CRC: %s\n", data);
-
-    printf("Introduce error? (1=Yes, 0=No): ");
-    scanf("%d", &error);
-
-    n = strlen(data);
-
-    if (error == 1)
+    for (int i = dl; i < dl + pl - 1; i++)
     {
-        printf("Bit position to flip (1-%d): ", n);
-        scanf("%d", &pos);
-
-        if (pos < 1 || pos > n)
-        {
-            printf("Invalid position\n");
-            close(s);
-            return 1;
-        }
-
-        data[pos-1] = (data[pos-1] == '0') ? '1' : '0';
-        printf("Modified Frame: %s\n", data);
+        char temp[2];
+        temp[0] = remainder[i];
+        temp[1] = '\0';
+        strcat(codeword, temp);
     }
 
-    send(s, data, strlen(data), 0);
-    printf("Frame sent through TCP\n");
+    printf("\nGenerated Codeword: %s\n",
+           codeword);
+
+    clock_gettime(CLOCK_MONOTONIC,
+                  &start);
+
+    send(s,
+         codeword,
+         strlen(codeword) + 1,
+         0);
+
+    send(s,
+         divisor,
+         strlen(divisor) + 1,
+         0);
+
+    int bytes_sent =
+        strlen(codeword) +
+        strlen(divisor);
+
+    int r = recv(s,
+                 result,
+                 sizeof(result) - 1,
+                 0);
+
+    clock_gettime(CLOCK_MONOTONIC,
+                  &end);
+
+    if (r > 0)
+    {
+        result[r] = '\0';
+
+        printf("\nServer Result: %s\n",
+               result);
+    }
+
+    rtt =
+        (end.tv_sec - start.tv_sec) * 1000.0 +
+        (end.tv_nsec - start.tv_nsec) / 1000000.0;
+
+    printf("\n--- Sender Metrics ---\n");
+    printf("Bytes Sent: %d\n",
+           bytes_sent);
+
+    printf("Packets Sent: 1\n");
+
+    printf("RTT: %.2f ms\n",
+           rtt);
+
+    printf("Throughput: %.2f bits/sec\n",
+           rtt > 0 ?
+           bytes_sent * 8.0 /
+           (rtt / 1000.0) : 0);
+
+    printf("PDR: %.2f%%\n",
+           r > 0 ? 100.0 : 0.0);
 
     close(s);
+
     return 0;
 }

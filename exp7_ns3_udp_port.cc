@@ -28,24 +28,48 @@ int main(int argc, char *argv[]) {
     Ipv4AddressHelper ip; ip.SetBase("10.1.1.0", "255.255.255.0");
     Ipv4InterfaceContainer iface = ip.Assign(devices);
 
-    // 3. Applications: two UDP servers and two clients
-    UdpServerHelper server5000(5000), server6000(6000);
-    ApplicationContainer servers = server5000.Install(nodes.Get(1));
-    servers.Add(server6000.Install(nodes.Get(1)));
-    servers.Start(Seconds(0)); servers.Stop(Seconds(20));
 
-    UdpClientHelper client5000(iface.GetAddress(1), 5000);
-    client5000.SetAttribute("MaxPackets", UintegerValue(0xFFFFFFFF));
-    client5000.SetAttribute("PacketSize", UintegerValue(512));
-    client5000.SetAttribute("Interval", TimeValue(Seconds(512.0 * 8 / 1e6)));
-    ApplicationContainer clients = client5000.Install(nodes.Get(0));
+    // 3. Applications
 
-    UdpClientHelper client6000(iface.GetAddress(1), 6000);
-    client6000.SetAttribute("MaxPackets", UintegerValue(0xFFFFFFFF));
-    client6000.SetAttribute("PacketSize", UintegerValue(512));
-    client6000.SetAttribute("Interval", TimeValue(Seconds(512.0 * 8 / 2e6)));
-    clients.Add(client6000.Install(nodes.Get(0)));
-    clients.Start(Seconds(1)); clients.Stop(Seconds(20));
+    // 6.1.1 Flow 1: Port 5000 (1 Mbps)
+
+    // Receiver server on Node 1, Port 5000
+    UdpServerHelper server1(5000);
+    ApplicationContainer sApp1 = server1.Install(nodes.Get(1));
+    sApp1.Start(Seconds(0.0));
+    sApp1.Stop(Seconds(20.0));
+
+    // Sender client on Node 0 targeting Port 5000
+    UdpClientHelper client1(iface.GetAddress(1), 5000);
+    client1.SetAttribute("MaxPackets", UintegerValue(0xFFFFFFFF));
+    client1.SetAttribute("PacketSize", UintegerValue(512));
+    client1.SetAttribute("Interval",
+        TimeValue(Seconds(512 * 8.0 / 1e6)));
+
+    ApplicationContainer cApp1 = client1.Install(nodes.Get(0));
+    cApp1.Start(Seconds(1.0));
+    cApp1.Stop(Seconds(20.0));
+
+
+    // 6.1.2 Flow 2: Port 6000 (2 Mbps)
+
+    // Receiver server on Node 1, Port 6000
+    UdpServerHelper server2(6000);
+    ApplicationContainer sApp2 = server2.Install(nodes.Get(1));
+    sApp2.Start(Seconds(0.0));
+    sApp2.Stop(Seconds(20.0));
+
+    // Sender client on Node 0 targeting Port 6000
+    UdpClientHelper client2(iface.GetAddress(1), 6000);
+    client2.SetAttribute("MaxPackets", UintegerValue(0xFFFFFFFF));
+    client2.SetAttribute("PacketSize", UintegerValue(512));
+    client2.SetAttribute("Interval",
+        TimeValue(Seconds(512 * 8.0 / 2e6)));
+
+    ApplicationContainer cApp2 = client2.Install(nodes.Get(0));
+    cApp2.Start(Seconds(1.0));
+    cApp2.Stop(Seconds(20.0));
+
 
     // 4. Tracing and FlowMonitor
     p2p.EnablePcapAll("exp7-udp-ports");
@@ -88,12 +112,24 @@ rm -f results_exp7.csv
 ./ns3 run "scratch/exp7_udp_ports --delay=20ms"
 
 VISUALIZATION (save as plot_exp7.py; run: python3 plot_exp7.py)
+
 import pandas as pd
 import matplotlib.pyplot as plt
+
 df = pd.read_csv("results_exp7.csv")
-for metric, ylabel in [("ThroughputMbps", "Throughput (Mbps)"), ("DelayMsAvg", "Average delay (ms)"), ("PDRPercent", "PDR (%)"), ("LossPercent", "Packet loss (%)")]:
-    for port, group in df.groupby("Port"):
-        plt.plot(group["DelayMs"], group[metric], marker="o", label=f"Port {port}")
-    plt.xlabel("Link delay (ms)"); plt.ylabel(ylabel); plt.title(ylabel + " vs link delay")
-    plt.grid(True); plt.legend(); plt.tight_layout(); plt.show()
+
+for metric in ["ThroughputMbps", "DelayMsAvg", "PDRPercent", "LossPercent"]:
+    df.pivot_table(
+        index="DelayMs",
+        columns="Port",
+        values=metric,
+        aggfunc="mean"
+    ).plot(kind="bar")
+
+    plt.title(metric + " Comparison")
+    plt.xlabel("Link Delay (ms)")
+    plt.ylabel(metric)
+    plt.tight_layout()
+    plt.show()
+
 */

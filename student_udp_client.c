@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <stdlib.h>
 #include <sys/time.h>
 
 int main()
@@ -73,6 +74,7 @@ int main()
 
     printf("Successful response ratio: %.2f%% (%d/%d)\n",
            received * 100.0 / attempts, received, attempts);
+    system("cat students.csv");
 
     close(s);
     return 0;

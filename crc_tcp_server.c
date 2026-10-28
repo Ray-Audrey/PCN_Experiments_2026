@@ -3,55 +3,82 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
-void divide(char data[], char rem[])
-{
-    char temp[200], gen[] = "10011";
-    int n = strlen(data);
-
-    strcpy(temp, data);
-
-    for (int i = 0; i <= n - 5; i++)
-        if (temp[i] == '1')
-            for (int j = 0; j < 5; j++)
-                temp[i+j] = (temp[i+j] == gen[j]) ? '0' : '1';
-
-    strncpy(rem, temp + n - 4, 4);
-    rem[4] = '\0';
-}
-
 int main()
 {
-    int s, c, n, error = 0;
-    char frame[200], rem[10];
+    int s, c;
+    char data[50], divisor[20], remainder[20];
+    char result[100];
+
     struct sockaddr_in a = {0};
 
     s = socket(AF_INET, SOCK_STREAM, 0);
+
     a.sin_family = AF_INET;
-    a.sin_port = htons(8082);
+    a.sin_port = htons(8081);
     a.sin_addr.s_addr = INADDR_ANY;
 
     bind(s, (struct sockaddr *)&a, sizeof(a));
+
     listen(s, 1);
 
-    printf("CRC Server Waiting...\n");
+    printf("CRC Server Running...\n");
+
     c = accept(s, NULL, NULL);
 
-    n = recv(c, frame, 199, 0);
-    if (n <= 0) return 1;
+    recv(c, data, sizeof(data), 0);
+    recv(c, divisor, sizeof(divisor), 0);
 
-    frame[n] = '\0';
-    printf("Received Frame: %s\n", frame);
+    strcpy(remainder, data);
 
-    divide(frame, rem);
-    printf("Verification Remainder: %s\n", rem);
+    int dl = strlen(data);
+    int pl = strlen(divisor);
 
-    for (int i = 0; i < 4; i++)
-        if (rem[i] != '0')
+    for (int i = 0; i <= dl - pl; i++)
+    {
+        if (remainder[i] == '1')
+        {
+            for (int j = 0; j < pl; j++)
+            {
+                remainder[i + j] =
+                    (remainder[i + j] == divisor[j]) ? '0' : '1';
+            }
+        }
+    }
+
+    int error = 0;
+
+    for (int i = dl - pl + 1; i < dl; i++)
+    {
+        if (remainder[i] != '0')
+        {
             error = 1;
+            break;
+        }
+    }
 
-    printf("%s\n", error ? "Error Detected" : "No Error Detected");
+    printf("\nReceived Codeword : %s\n", data);
+    printf("Divisor           : %s\n", divisor);
+
+    if (error)
+    {
+        printf("Result            : Error Detected\n");
+        strcpy(result, "Error Detected");
+    }
+    else
+    {
+        printf("Result            : No Error Detected\n");
+        strcpy(result, "No Error Detected");
+    }
+
+    printf("\n--- Receiver Metrics ---\n");
+    printf("Bytes Received: %lu\n",
+           strlen(data) + strlen(divisor));
+    printf("Packets Received: 1\n");
+
+    send(c, result, strlen(result), 0);
 
     close(c);
     close(s);
+
     return 0;
 }
